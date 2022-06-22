@@ -1,0 +1,553 @@
+---
+title: "EES_surveys"
+author: "Kasper Michelsen"
+date: "22/06/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Libraries
+```{r}
+library(haven)
+library(tidyverse)
+```
+
+##1994 EES Survey
+```{r}
+#Loading in the 1994 dataset 
+df_1994 = read_sav("ZA2865.sav")
+
+#Only taking the rows with answers for 77 (MIP), 78 (2.MIP) and 79 (3.MIP) (the Post-election main-study) and Nation-Vote-Recall, Vote-Intention, and Party-Identification columns
+subset_1994 <- select(df_1994,"id", "country", "v77", "v78", "v79")
+
+##NVR, VI, and PID answers are seperated by country. We want to put these answers in one column starting by reating one column for V91 (National Vote Recall)
+
+#The raw dataframe includes four studies. We are only interested in the post-election main-study where answers for v77, v78, and v79 are included:
+party_subset_1994 <- df_1994[26476:39571,]
+#Gathering the relevant columns into a seperate dataframe
+party_subset_1994 <- party_subset_1994 %>% select("id", "v91_bel", "v91_den", "v91_ege", "v91_fra", "v91_gb", "v91_gre", "v91_irl", "v91_ita", "v91_lux", "v91_net", "v91_nir", "v91_por", "v91_spa", "v91_wge", "v89_bel", "v89_den", "v89_ege", "v89_fra", "v89_gb", "v89_gre", "v89_irl", "v89_ita", "v89_lux", "v89_net", "v89_nir", "v89_por", "v89_spa", "v89_wge", "v105_bel", "v105_den", "v105_ege", "v105_fra", "v105_gb", "v105_gre", "v105_irl", "v105_ita", "v105_lux", "v105_net", "v105_nir", "v105_por", "v105_spa", "v105_wge")
+
+#Creating one long column of National Vote Recall
+party_subset_1994_v91 <- select(party_subset_1994, id, v91_bel, v91_den, v91_ege, v91_fra, v91_gb, v91_gre, v91_irl, v91_ita, v91_lux, v91_net, v91_nir, v91_por, v91_spa, v91_wge)
+
+ps_NVR_1994 <- party_subset_1994_v91 %>% 
+  pivot_longer(v91_bel: v91_den: v91_ege: v91_fra: v91_gb: v91_gre: v91_irl: v91_ita: v91_lux: v91_net: v91_nir: v91_por: v91_spa: v91_wge, "National_vote_recall")
+ps_NVR_1994 <- na.omit(ps_NVR_1994)
+
+#Doing the same for Vote Intention
+party_subset_1994_v89 <- select(party_subset_1994, id, v89_bel, v89_den, v89_ege, v89_fra, v89_gb, v89_gre, v89_irl, v89_ita, v89_lux, v89_net, v89_nir, v89_por, v89_spa, v89_wge)
+
+ps_VI_1994 <- party_subset_1994_v89 %>% 
+  pivot_longer(v89_bel: v89_den: v89_ege: v89_fra: v89_gb: v89_gre: v89_irl: v89_ita: v89_lux: v89_net: v89_nir: v89_por: v89_spa: v89_wge, "Vote_intention")
+ps_VI_1994 <- na.omit(ps_VI_1994)
+
+#Same for Party Identification
+party_subset_1994_v105 <- select(party_subset_1994, id, v105_bel, v105_den, v105_ege, v105_fra, v105_gb, v105_gre, v105_irl, v105_ita, v105_lux, v105_net, v105_nir, v105_por, v105_spa, v105_wge)
+
+ps_PID_1994 <- party_subset_1994_v105 %>% 
+  pivot_longer(v105_bel: v105_den: v105_ege: v105_fra: v105_gb: v105_gre: v105_irl: v105_ita: v105_lux: v105_net: v105_nir: v105_por: v105_spa: v105_wge, "v105_PID")
+ps_PID_1994 <- na.omit(ps_PID_1994)
+
+#Making small adjustments so it easier merge into the final subset of 1994 
+ps_NVR_1994 <- rename(ps_NVR_1994, NVR = value)
+ps_VI_1994 <- rename(ps_VI_1994, VI = value)
+ps_PID_1994 <- rename(ps_PID_1994, PID = value)
+
+ps_NVR_VI_1994 <- merge.data.frame(ps_NVR_1994, ps_VI_1994, by="id")
+partycolumns_1994 <- merge.data.frame(ps_NVR_VI_1994, ps_PID_1994, by="id")
+#We now have the relevant columns that we can later merge into the final data frame  for 1994
+
+#Taking only the relevant rows in the subset dataframe (the one with v77, v78 and v79)
+newsubset_1994 <- subset_1994[26476:39571,]
+numsubset1994 <- newsubset_1994
+#Make the variables numeric in order to run the loop smoothly
+numsubset1994$v77 <- as.numeric(numsubset1994$v77)
+numsubset1994$v78 <- as.numeric(numsubset1994$v78)
+numsubset1994$v79 <- as.numeric(numsubset1994$v79)
+#New variable in the dataset called climate_in_general
+newsubset_1994$climate_in_general <- 0
+
+#Loop that puts a 1 into the new variable if either V77, V78, or V79 have a score of 9 (answer regarding environmental concern)
+for (i in 1:nrow(newsubset_1994)){
+  if (numsubset1994$v77[i] == 9 || numsubset1994$v78[i] == 9 || numsubset1994$v79[i] == 9) {
+    newsubset_1994$climate_in_general[i] <- 1
+  }
+  else {
+    newsubset_1994$climate_in_general[i] <- 0
+  }
+}
+
+#The same thing for MIP
+newsubset_1994$MIP_climate <- 0
+
+for (i in 1:nrow(newsubset_1994)){
+  if (numsubset1994$v77[i] == 9) {
+    newsubset_1994$MIP_climate[i] <- 1
+  }
+  else {
+    newsubset_1994$MIP_climate[i] <- 0
+  }
+}
+
+#Maybe not necessary in Stata but the country-labels are not shown in R. This code creates a country label for each observation
+countries1994 <- stack(attr(subset_1994$country, 'labels'))
+numsubset1994$country <- as.numeric(numsubset1994$country)
+countries1994$values <- as.numeric(countries1994$values)
+countries1994$ind <- as.character(countries1994$ind)
+
+newsubset_1994$Country_name <- 0
+#Inserting country-label
+for (i in 1:nrow(newsubset_1994)){
+  labelvalue1994 <- numsubset1994$country[i]
+  for (j in 1:nrow(countries1994)){
+    labelvalue1994_2 <- countries1994$values[j]
+    labelname1994 <- countries1994$ind[j]
+    if (labelvalue1994 == labelvalue1994_2) {
+      newsubset_1994$Country_name[i] <- labelname1994
+    }
+  }
+}
+
+#Finally merging the subset with the party-columns dataframe and the dataframe should include all of the important information
+newsubset_1994 <- merge.data.frame(newsubset_1994, partycolumns_1994, by="id")
+
+#Creating a summary of the number of respondents showing concern for the environment and the total number of respondents
+summary_1994 <- newsubset_1994 %>% group_by(Country_name) %>% summarise(sum(climate_in_general==1))
+
+testest1994 <- newsubset_1994 %>% count(Country_name)
+
+summary_1994 <- merge.data.frame(summary_1994, testest1994, by="Country_name")
+
+#Write the final subset of relevant columns (newsubset_1994) into a format applicable in Stata
+write_dta(newsubset_1994,"/Users/kaspermichelsen/EES_Survey/df1994.dta")
+```
+
+#The 1999 Survey
+```{r}
+#Loading in the 1999 EES_survey
+df_1999 <- read_dta("P1560a.dta")
+
+#Creating a subset of the relevant columns (respondent ID, country, NVR, VI, PID, MIP and other problems in the country)
+subset_1999 <- select(df_1999, "var001", "var002", "var013", "var014", "var015", "var016", "var017", "var018", "var019", "var020", "var079", "var096", "var097")
+
+#Creating a country label in the data frame (this might not matter when opening the data frame in Stata)
+country_1999 <- stack(attr(df_1999$var002, 'labels'))
+subset_test1999 <- subset_1999
+subset_test1999$var002 <- as.numeric(subset_test1999$var002)
+country_1999$values <- as.numeric(country_1999$values)
+country_1999$ind <- as.character(country_1999$ind)
+
+subset_1999$country_label <- 0
+#Inserting country-label
+for (i in 1:nrow(subset_1999)){
+  labelvalue1999 <- subset_test1999$var002[i]
+  for (j in 1:nrow(country_1999)){
+    labelvalue1999_2 <- country_1999$values[j]
+    labelname1999 <- country_1999$ind[j]
+    if (labelvalue1999 == labelvalue1999_2) {
+      subset_1999$country_label[i] <- labelname1999
+    }
+  }
+}
+
+# Creating the MIP dummy variable through a loop (if the respondent answered 60 or 61 as MIP put 1 into the column)
+subset_1999$MIP_climate <- 0
+
+for (i in 1:nrow(subset_1999)){
+  if (subset_test1999$var013[i] == 60 || subset_test1999$var013[i] == 61) {
+    subset_1999$MIP_climate[i] <- 1
+  }
+  else {
+    subset_1999$MIP_climate[i] <- 0
+  }
+}
+
+#If they mentioned environment or climate change at all put a 1 into this following dummy variable:
+subset_1999$climate_in_general <- 0
+
+for (i in 1:nrow(subset_1999)){
+  if (subset_test1999$var013[i] == 60 || subset_test1999$var013[i] == 61 || subset_test1999$var014[i] == 60 || subset_test1999$var014[i] == 61 || subset_test1999$var015[i] == 60 || subset_test1999$var015[i] == 61 || subset_test1999$var016[i] == 60 || subset_test1999$var016[i] == 61 || subset_test1999$var017[i] == 60 || subset_test1999$var017[i] == 61 || subset_test1999$var018[i] == 60 || subset_test1999$var018[i] == 61 || subset_test1999$var019[i] == 60 || subset_test1999$var019[i] == 61) {
+    subset_1999$climate_in_general[i] <- 1
+  }
+  else {
+    subset_1999$climate_in_general[i] <- 0
+  }
+}
+
+#Summary like in the 1994 case
+summary_1999 <- subset_1999 %>% group_by(country_label) %>% summarise(sum(climate_in_general==1))
+
+testest <- subset_1999 %>% count(country_label)
+
+summary_1999 <- merge.data.frame(summary_1999, testest, by="country_label")
+
+#Writing the subset into a Stata file
+write_dta(subset_1999,"/Users/kaspermichelsen/EES_Survey/df1999.dta")
+```
+
+#2004
+```{r}
+#Loading in the 2004 EES_survey
+df_2004 = read_sav("ZA4566.sav")
+#Selecting the relevant columns (column v285 is included (Environment column coded by EES) but is not used in the study as it appears to be incomplete for some countries.)
+subset_2004 <- select(df_2004, "country", "idnum", "v285", "v015", "v016", "v017", "v018", "v019", "v020", "v021", "v022", "v023", "v024", "v025", "v026", "v027", "v028", "v029", "v113", "v114", "v211")
+
+#Creating a country-label column
+countries2004 <- stack(attr(subset_2004$country, 'labels'))
+test2004 <- subset_2004
+test2004$country <- as.numeric(test2004$country)
+countries2004$values <- as.numeric(countries2004$values)
+countries2004$ind <- as.character(countries2004$ind)
+
+subset_2004$country_name <- 0
+#Inserting country-label
+for (i in 1:nrow(test2004)){
+  labelvalue2004 <- test2004$country[i]
+  for (j in 1:nrow(countries2004)){
+    labelvalue2004_2 <- countries2004$values[j]
+    labelname2004 <- countries2004$ind[j]
+
+    if (labelvalue2004 == labelvalue2004_2) {
+      subset_2004$country_name[i] <- labelname2004
+    }
+  }
+}
+
+#Creating the dummy variable with 1 if respondents mention environmental concerns or climate change at all
+subset_2004$climate_in_general <- 0
+
+#Making all the answers numeric instead of stata-format
+test2004$v015 <- as.numeric(test2004$v015)
+test2004$v016 <- as.numeric(test2004$v016)
+test2004$v017 <- as.numeric(test2004$v017)
+test2004$v018 <- as.numeric(test2004$v018)
+test2004$v019 <- as.numeric(test2004$v019)
+test2004$v020 <- as.numeric(test2004$v020)
+test2004$v021 <- as.numeric(test2004$v021)
+test2004$v022 <- as.numeric(test2004$v022)
+test2004$v023 <- as.numeric(test2004$v023)
+test2004$v024 <- as.numeric(test2004$v024)
+test2004$v025 <- as.numeric(test2004$v025)
+test2004$v026 <- as.numeric(test2004$v026)
+test2004$v027 <- as.numeric(test2004$v027)
+test2004$v028 <- as.numeric(test2004$v028)
+
+#All NA's replaced with 0 (we can do this because we are not looking for 0's when looking for environment answers)
+test2004[is.na(test2004)] <- 0
+
+#In the general coding scheme 60 and 61 are environment related. countries with unique coding schemes: 1=Austria, 3=Britain, 4=Cyprus, 9=France, 13=Ireland (Ireland follows the general coding scheme but had an extra code for waste management and pollution), 17=Luxembourg. 
+#NOTE: Netherlands and Northern Ireland have a different coding scheme but it is not mentioned in the code book thus resulting in that both countries appear to have 0 respondents that are concerned with the environment.
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==1 || test2004$country[i]==3 || test2004$country[i]==4 || test2004$country[i]==9 || test2004$country[i]==13 || test2004$country[i]==17){
+    subset_2004$climate_in_general[i] <- 0
+  }
+  else{
+    #The loop is initially only run on the countries that follow the general coding scheme and the rest of the countries are added to the column right after
+    if (test2004$v015[i]==60 || test2004$v015[i]==61 || test2004$v016[i]==60 || test2004$v016[i]==61 || test2004$v017[i]==60 || test2004$v017[i]==61 || test2004$v018[i]==60 || test2004$v018[i]==61 || test2004$v019[i]==60 || test2004$v019[i]==61 || test2004$v020[i]==60 || test2004$v020[i]==61 || test2004$v021[i]==60 || test2004$v021[i]==61 || test2004$v022[i]==60 || test2004$v022[i]==61 || test2004$v023[i]==60 || test2004$v023[i]==61 || test2004$v024[i]==60 || test2004$v024[i]==61 || test2004$v025[i]==60 || test2004$v025[i]==61 || test2004$v026[i]==60 || test2004$v026[i]==61 || test2004$v027[i]==60 || test2004$v027[i]==61 || test2004$v028[i]==60 || test2004$v028[i]==61) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Austria (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==1){
+    if (test2004$v028[i]==9) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Britain (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==3){
+    if (test2004$v028[i]==25 || test2004$v028[i]==29 || test2004$v028[i]==47) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Cyprus does not have an option to say environment in the survey (agriculture is the closest one)
+
+#France (44 and 45 concerned the environment)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==9){
+    if (test2004$v015[i]==44 || test2004$v015[i]==45 || test2004$v016[i]==44 || test2004$v016[i]==45 || test2004$v017[i]==44 || test2004$v017[i]==45 || test2004$v018[i]==44 || test2004$v018[i]==45 || test2004$v019[i]==44 || test2004$v019[i]==45 || test2004$v020[i]==44 || test2004$v020[i]==45 || test2004$v021[i]==44 || test2004$v021[i]==45 || test2004$v022[i]==44 || test2004$v022[i]==45 || test2004$v023[i]==44 || test2004$v023[i]==45 || test2004$v024[i]==44 || test2004$v024[i]==45 || test2004$v025[i]==44 || test2004$v025[i]==45 || test2004$v026[i]==44 || test2004$v026[i]==45 || test2004$v027[i]==44 || test2004$v027[i]==45 || test2004$v028[i]==44 || test2004$v028[i]==45) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Ireland (had an extra option (3) connected to environment)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==13){
+    if (test2004$v015[i]==60 || test2004$v015[i]==61 || test2004$v015[i]==3 ||test2004$v016[i]==60 || test2004$v016[i]==61 || test2004$v016[i]==3 || test2004$v017[i]==60 || test2004$v017[i]==61 || test2004$v017[i]==3 || test2004$v018[i]==60 || test2004$v018[i]==61 || test2004$v018[i]==3 || test2004$v019[i]==60 || test2004$v019[i]==61 || test2004$v019[i]==3 || test2004$v020[i]==60 || test2004$v020[i]==61 || test2004$v020[i]==3 || test2004$v021[i]==60 || test2004$v021[i]==61 || test2004$v021[i]==3 || test2004$v022[i]==60 || test2004$v022[i]==61 || test2004$v022[i]==3 || test2004$v023[i]==60 || test2004$v023[i]==61 || test2004$v023[i]==3 || test2004$v024[i]==60 || test2004$v024[i]==61 || test2004$v024[i]==3 || test2004$v025[i]==60 || test2004$v025[i]==61 || test2004$v025[i]==3 || test2004$v026[i]==60 || test2004$v026[i]==61 || test2004$v026[i]==3 || test2004$v027[i]==60 || test2004$v027[i]==61 || test2004$v027[i]==3 || test2004$v028[i]==60 || test2004$v028[i]==61 || test2004$v028[i]==3) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Luxembourg (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==17){
+    if (test2004$v028[i]==2) {
+      subset_2004$climate_in_general[i] <- 1
+    }
+  }
+}
+
+#Creating the MIP column with the same precautions as mentioned above:
+subset_2004$MIP_climate <- 0
+
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==1 || test2004$country[i]==3 || test2004$country[i]==4 || test2004$country[i]==9 || test2004$country[i]==13 || test2004$country[i]==17){
+    subset_2004$MIP_climate[i] <- 0
+  }
+  else{
+    if (test2004$v028[i]==60 || test2004$v028[i]==61) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+#Austria (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==1){
+    if (test2004$v028[i]==9) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+#Britain (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==3){
+    if (test2004$v028[i]==25 || test2004$v028[i]==29 || test2004$v028[i]==47) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+#France
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==9){
+    if (test2004$v028[i]==44 || test2004$v028[i]==45) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+#Ireland
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==13){
+    if (test2004$v028[i]==60 || test2004$v028[i]==61 || test2004$v028[i]==3) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+#Luxembourg (only MIP was asked)
+for (i in 1:nrow(subset_2004)){
+  if (test2004$country[i]==17){
+    if (test2004$v028[i]==2) {
+      subset_2004$MIP_climate[i] <- 1
+    }
+  }
+}
+
+summary_2004 <- subset_2004 %>% group_by(country_name) %>% summarise(sum(climate_in_general==1))
+ 
+testest2004 <- subset_2004 %>% count(country_name)
+
+summary_2004 <- merge.data.frame(summary_2004, testest2004, by="country_name")
+ 
+write_dta(subset_2004,"/Users/kaspermichelsen/EES_Survey/df2004.dta")
+```
+
+#2009
+```{r}
+df_2009 = read_sav("ZA5055_v1-1-1.sav")
+#Make a subset with relevant columns (ID, MIP, 2.MIP, 3.MIP, NVR, VI, PID, country)
+subset_2009 = select(df_2009, "q1", "t100", "q4", "q2", "q3", "t102", "q27", "q28", "q87")
+
+#country label in the subset
+attributes2009country <- stack(attr(df_2009$t102, 'labels'))
+
+#Create a new empty column for the name of the parties
+subset_2009$countryName <- 0
+
+#Creating a duplicate df of the attribute DF
+newC2009 <- as.data.frame(attributes2009country)
+
+#Make the labels as.character instead of Stata format
+newC2009$ind <- as.character(newC2009$ind)
+
+#Doing the same for the subset data and making the numbers as.numeric for the 'party' question. This will make the loop easier run. 
+newS2009 <- as.data.frame(subset_2009)
+newS2009$t102 <- as.numeric(newS2009$t102)
+
+#Make a function that inserts party-labels back into the dataframe 
+for (i in 1:nrow(subset_2009)){
+  labelvalue10 <- newS2009$t102[i]
+  for (j in 1:nrow(attributes2009country)){
+    labelvalue11 <- newC2009$values[j]
+    labelname10 <- newC2009$ind[j]
+    if (labelvalue10 == labelvalue11) {
+      #Inserting the new row with labels into the subset_2009 
+      subset_2009$countryName[i] <- labelname10
+    }
+  }
+}
+
+#Make an if-statement that puts 1 into all climate-related problems (2, 8, 86, and 87 are environment-related) and 0 into non-climate related problems (for the MIP)
+subset_2009$MIP_climate <- 0
+
+for (i in 1:nrow(subset_2009)){
+  if (newS2009$q1[i] == 2 || newS2009$q1[i] == 8 || newS2009$q1[i] == 86 || newS2009$q1[i] == 87) {
+    subset_2009$MIP_climate[i] <- 1
+  }
+  else {
+    subset_2009$MIP_climate[i] <- 0
+  }
+}
+
+#Make a dummy variable with 1 if respondents named climate as a problem at all and 0 if the did not
+subset_2009$climate_in_general <- 0
+
+newS2009$q2 <- as.numeric(newS2009$q2)
+newS2009$q3 <- as.numeric(newS2009$q3)
+
+for (i in 1:nrow(subset_2009)){
+  if (newS2009$q1[i] == 2 || newS2009$q1[i] == 8 || newS2009$q1[i] == 86 || newS2009$q1[i] == 87 || newS2009$q2[i] == 2 || newS2009$q2[i] == 8 || newS2009$q2[i] == 86 || newS2009$q2[i] == 87 || newS2009$q3[i] == 2 || newS2009$q3[i] == 8 || newS2009$q3[i] == 86 || newS2009$q3[i] == 87) {
+    subset_2009$climate_in_general[i] <- 1
+  }
+  else {
+    subset_2009$climate_in_general[i] <- 0
+  }
+}
+
+summary_2009 <- subset_2009 %>% group_by(countryName) %>% summarise(sum(climate_in_general==1))
+
+testest1 <- subset_2009 %>% count(countryName)
+
+summary_2009 <- merge.data.frame(summary_2009, testest1, by="countryName")
+
+write_dta(subset_2009,"/Users/kaspermichelsen/EES_Survey/df2009.dta")
+```
+
+#2014
+```{r}
+#Loading in the 2014 EES survey
+df_2014 = read_sav("ZA5160_v4-0-0.sav")
+
+#Selecting the relevant columns (Country, id, MIP, 2. MIP, NVR, VI, PID)
+subset_2014 <- select(df_2014, "countrycode", "respid", "qpp1aO_EES", "qpp1bO_EES", "qpp5_ees", "qpp6_ees", "qpp21_ees")
+
+#Creating a country column
+countries2014 <- stack(attr(df_2014$countrycode, 'labels'))
+
+numsubset_2014 <- subset_2014
+numsubset_2014$countrycode <- as.numeric(numsubset_2014$countrycode)
+countries2014$values <- as.numeric(countries2014$values)
+countries2014$ind <- as.character(countries2014$ind)
+
+subset_2014$Country_name <- 0
+#Inserting country-label
+for (i in 1:nrow(subset_2014)){
+  labelvalue2014 <- numsubset_2014$countrycode[i]
+  for (j in 1:nrow(countries2014)){
+    labelvalue2014_2 <- countries2014$values[j]
+    labelname2014 <- countries2014$ind[j]
+    if (labelvalue2014 == labelvalue2014_2) {
+      subset_2014$Country_name[i] <- labelname2014
+    }
+  }
+}
+
+#Creating the dummy variable if the respondents answered that climate or environmental issues were either MIP or 2. MIP:
+#Values are turned into numeric values to make the loop run smoothly
+numsubset_2014$qpp1aO_EES <- as.numeric(numsubset_2014$qpp1aO_EES)
+numsubset_2014$qpp1bO_EES <- as.numeric(numsubset_2014$qpp1bO_EES)
+subset_2014$climate_in_general <- 0
+
+for (i in 1:nrow(subset_2014)){
+  if (numsubset_2014$qpp1aO_EES[i] == 2 || numsubset_2014$qpp1aO_EES[i] == 8 || numsubset_2014$qpp1aO_EES[i] == 86 || numsubset_2014$qpp1aO_EES[i] == 87 || numsubset_2014$qpp1bO_EES[i] == 2 || numsubset_2014$qpp1bO_EES[i] == 8 || numsubset_2014$qpp1bO_EES[i] == 86 || numsubset_2014$qpp1bO_EES[i] == 87) {
+    subset_2014$climate_in_general[i] <- 1
+  }
+  else {
+    subset_2014$climate_in_general[i] <- 0
+  }
+}
+
+#Same but only if the responded that climate-issues were MIP
+subset_2014$climate_MIP <- 0
+
+for (i in 1:nrow(subset_2014)){
+  if (numsubset_2014$qpp1aO_EES[i] == 2 || numsubset_2014$qpp1aO_EES[i] == 8 || numsubset_2014$qpp1aO_EES[i] == 86 || numsubset_2014$qpp1aO_EES[i] == 87) {
+    subset_2014$climate_MIP[i] <- 1
+  }
+  else {
+    subset_2014$climate_MIP[i] <- 0
+  }
+}
+
+#Summary
+summary_2014 <- subset_2014 %>% group_by(Country_name) %>% summarise(sum(climate_in_general==1))
+
+testest2014 <- subset_2014 %>% count(Country_name)
+
+summary_2014 <- merge.data.frame(summary_2014, testest2014, by="Country_name")
+
+write_dta(subset_2014,"/Users/kaspermichelsen/EES_Survey/df2014.dta")
+```
+
+#2019
+```{r}
+#Loading the 2019 EES Survey
+df_2019 = read_dta("ZA7581_v2-0-1.dta")
+#Loading in subset of the 2019 EES survey with manually coded dummy variable (only MIP)
+subset_2019_new <- read_csv("problemcoding.csv")
+
+#a few observations are NA's in the climate_MIP column, this is replaced with 0:
+subset_2019_new1 <- subset_2019_new %>%
+    mutate(`Environment ? (1/0)` = if_else(is.na(`Environment ? (1/0)`), 0, `Environment ? (1/0)`))
+#Renaming and removing irrelevant columns to be able to write the dta file
+subset_2019_new1 <- rename(subset_2019_new1, MIP_climate  = `Environment ? (1/0)`)
+subset_2019_new1$...1 <- NULL
+subset_2019_new1 <- rename(subset_2019_new1, MIP_google_translate = `Translation via google doc`)
+
+#Selecting the relevant columns from the original 2019 EES Survey (NVR, PID and ID (Voting Intention will be manually coded later))
+partyQuestions_2019 <- select(df_2019, "Q9_ees", "Q25_EES", "serial")
+
+#Merging the two dataframes:
+subset_2019 <- merge.data.frame(subset_2019_new1, partyQuestions_2019, by="serial")
+
+summary_2019 <- subset_2019 %>% group_by(countrycode) %>% summarise(sum(MIP_climate==1))
+
+testest2019 <- subset_2019 %>% count(countrycode)
+
+summary_2019 <- merge.data.frame(summary_2019, testest2019, by="countrycode")
+
+write_dta(subset_2019,"/Users/kaspermichelsen/EES_Survey/df2019.dta")
+```
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
